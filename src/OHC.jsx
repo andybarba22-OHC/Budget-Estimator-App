@@ -68,59 +68,209 @@ const newGoal = () => ({
 });
 
 // ── Claude API call ───────────────────────────────────────────────────────────
-async function callClaude(prompt) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "anthropic-dangerous-direct-browser-access": "true",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 400,
-      messages: [{ role: "user", content: prompt }],
-    }),
+// CITY DATA — 50 US cities. Edit the numbers here to tune estimates.
+// Each row: travel (round-trip flight cost), hotel (per night), food (per day), homePrice (median).
+const CITIES = [
+  { city: "New York", state: "NY", travel: 380, hotel: 380, food: 140, homePrice: 850000, aliases: ["nyc", "manhattan", "brooklyn"] },
+  { city: "Boston", state: "MA", travel: 340, hotel: 320, food: 110, homePrice: 720000, aliases: [] },
+  { city: "Philadelphia", state: "PA", travel: 280, hotel: 230, food: 90, homePrice: 300000, aliases: ["philly"] },
+  { city: "Washington", state: "DC", travel: 300, hotel: 300, food: 110, homePrice: 680000, aliases: ["dc"] },
+  { city: "Pittsburgh", state: "PA", travel: 260, hotel: 170, food: 75, homePrice: 230000, aliases: [] },
+  { city: "Baltimore", state: "MD", travel: 270, hotel: 200, food: 90, homePrice: 280000, aliases: [] },
+  { city: "Hartford", state: "CT", travel: 290, hotel: 200, food: 90, homePrice: 330000, aliases: [] },
+  { city: "Providence", state: "RI", travel: 300, hotel: 210, food: 95, homePrice: 380000, aliases: [] },
+  { city: "Buffalo", state: "NY", travel: 280, hotel: 160, food: 70, homePrice: 200000, aliases: [] },
+  { city: "Atlanta", state: "GA", travel: 250, hotel: 200, food: 90, homePrice: 380000, aliases: [] },
+  { city: "Miami", state: "FL", travel: 320, hotel: 280, food: 120, homePrice: 550000, aliases: [] },
+  { city: "Orlando", state: "FL", travel: 280, hotel: 210, food: 90, homePrice: 380000, aliases: [] },
+  { city: "Tampa", state: "FL", travel: 280, hotel: 200, food: 90, homePrice: 380000, aliases: [] },
+  { city: "Charlotte", state: "NC", travel: 260, hotel: 190, food: 85, homePrice: 380000, aliases: [] },
+  { city: "Raleigh", state: "NC", travel: 270, hotel: 180, food: 85, homePrice: 430000, aliases: [] },
+  { city: "Nashville", state: "TN", travel: 270, hotel: 240, food: 100, homePrice: 450000, aliases: [] },
+  { city: "Charleston", state: "SC", travel: 300, hotel: 280, food: 110, homePrice: 520000, aliases: [] },
+  { city: "Savannah", state: "GA", travel: 290, hotel: 220, food: 95, homePrice: 340000, aliases: [] },
+  { city: "New Orleans", state: "LA", travel: 280, hotel: 230, food: 110, homePrice: 280000, aliases: ["nola"] },
+  { city: "Richmond", state: "VA", travel: 260, hotel: 180, food: 85, homePrice: 340000, aliases: [] },
+  { city: "Chicago", state: "IL", travel: 280, hotel: 250, food: 110, homePrice: 340000, aliases: [] },
+  { city: "Detroit", state: "MI", travel: 250, hotel: 160, food: 75, homePrice: 220000, aliases: [] },
+  { city: "Cleveland", state: "OH", travel: 260, hotel: 160, food: 70, homePrice: 130000, aliases: [] },
+  { city: "Columbus", state: "OH", travel: 260, hotel: 170, food: 75, homePrice: 260000, aliases: [] },
+  { city: "Cincinnati", state: "OH", travel: 260, hotel: 170, food: 75, homePrice: 230000, aliases: [] },
+  { city: "Indianapolis", state: "IN", travel: 250, hotel: 160, food: 70, homePrice: 220000, aliases: ["indy"] },
+  { city: "Milwaukee", state: "WI", travel: 270, hotel: 170, food: 80, homePrice: 200000, aliases: [] },
+  { city: "Minneapolis", state: "MN", travel: 280, hotel: 200, food: 90, homePrice: 340000, aliases: ["twin cities", "st paul"] },
+  { city: "Kansas City", state: "MO", travel: 260, hotel: 170, food: 80, homePrice: 240000, aliases: ["kc"] },
+  { city: "St. Louis", state: "MO", travel: 260, hotel: 170, food: 80, homePrice: 200000, aliases: ["st louis", "saint louis"] },
+  { city: "Madison", state: "WI", travel: 290, hotel: 180, food: 80, homePrice: 350000, aliases: [] },
+  { city: "Dallas", state: "TX", travel: 280, hotel: 200, food: 95, homePrice: 380000, aliases: [] },
+  { city: "Houston", state: "TX", travel: 280, hotel: 200, food: 90, homePrice: 320000, aliases: [] },
+  { city: "Austin", state: "TX", travel: 290, hotel: 260, food: 100, homePrice: 520000, aliases: [] },
+  { city: "San Antonio", state: "TX", travel: 270, hotel: 190, food: 85, homePrice: 280000, aliases: [] },
+  { city: "Oklahoma City", state: "OK", travel: 270, hotel: 160, food: 75, homePrice: 200000, aliases: ["okc"] },
+  { city: "Memphis", state: "TN", travel: 270, hotel: 160, food: 75, homePrice: 170000, aliases: [] },
+  { city: "Louisville", state: "KY", travel: 260, hotel: 170, food: 80, homePrice: 240000, aliases: [] },
+  { city: "Denver", state: "CO", travel: 280, hotel: 240, food: 100, homePrice: 550000, aliases: [] },
+  { city: "Phoenix", state: "AZ", travel: 290, hotel: 200, food: 90, homePrice: 430000, aliases: [] },
+  { city: "Salt Lake City", state: "UT", travel: 280, hotel: 200, food: 90, homePrice: 520000, aliases: ["slc"] },
+  { city: "Las Vegas", state: "NV", travel: 290, hotel: 200, food: 100, homePrice: 400000, aliases: ["vegas"] },
+  { city: "Albuquerque", state: "NM", travel: 300, hotel: 170, food: 80, homePrice: 330000, aliases: [] },
+  { city: "Boise", state: "ID", travel: 330, hotel: 180, food: 85, homePrice: 480000, aliases: [] },
+  { city: "Los Angeles", state: "CA", travel: 340, hotel: 280, food: 130, homePrice: 880000, aliases: ["la"] },
+  { city: "San Francisco", state: "CA", travel: 350, hotel: 350, food: 150, homePrice: 1200000, aliases: ["sf", "san fran"] },
+  { city: "San Diego", state: "CA", travel: 330, hotel: 280, food: 120, homePrice: 850000, aliases: [] },
+  { city: "Seattle", state: "WA", travel: 330, hotel: 260, food: 120, homePrice: 780000, aliases: [] },
+  { city: "Portland", state: "OR", travel: 320, hotel: 230, food: 110, homePrice: 550000, aliases: [] },
+  { city: "Sacramento", state: "CA", travel: 320, hotel: 210, food: 100, homePrice: 550000, aliases: [] },
+];
+
+// Average US city fallback (for unrecognized inputs)
+const DEFAULT_CITY = { city: "Average US City", state: "—", travel: 320, hotel: 220, food: 100, homePrice: 400000, aliases: [] };
+
+function findCity(input) {
+  if (!input) return null;
+  const norm = input.toLowerCase().trim();
+  return CITIES.find((c) => {
+    if (norm.includes(c.city.toLowerCase())) return true;
+    // State codes need word boundaries (e.g. "OK" should not match "tOKyo")
+    const stateRe = new RegExp("\\b" + c.state.toLowerCase() + "\\b");
+    if (stateRe.test(norm)) return true;
+    if (c.aliases && c.aliases.some((a) => norm.includes(a.toLowerCase()))) return true;
+    return false;
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const data = await res.json();
-  const raw = data.content.find((c) => c.type === "text")?.text ?? "";
-  return JSON.parse(raw.replace(/```json\n?|```/g, "").trim());
 }
 
-function buildPrompt(g) {
-  if (g.type === "wedding") {
-    return `You are a wedding cost estimator. Estimate realistic costs for a guest attending this wedding:
-Location: ${g.location}
-Date: ${g.date || "upcoming"}
-Role: ${g.role}
-Dress code: ${g.dresscode}
+// ── Lookup-based estimators ───────────────────────────────────────────────────
+function estimateWedding(g) {
+  const match = findCity(g.location);
+  const city = match || DEFAULT_CITY;
+  const inParty = ["bridesmaid", "MOH", "groomsman", "best man"].includes(g.role);
 
-Assume the guest lives ~500 miles away (adjust for obvious destination weddings). Include: round-trip travel, 1-2 nights accommodation, registry gift, attire appropriate for their role and dress code, and secondary events (bachelorette/bachelor if bridesmaid/groomsman/MOH/best man; rehearsal dinner if in the wedding party).
+  const travel = city.travel;
+  const nights = inParty ? 2 : 1;
+  const accommodation = city.hotel * nights;
+  const gift = inParty ? 125 : 100;
 
-Return ONLY valid JSON with no markdown:
-{"travel":number,"accommodation":number,"gift":number,"attire":number,"events":number,"total":number,"notes":"one concise sentence"}`;
+  let attire = 0;
+  if (g.role === "guest") {
+    attire = { "casual": 80, "cocktail": 150, "black tie": 300, "beach / destination": 120 }[g.dresscode] ?? 150;
+  } else if (g.role === "bridesmaid") {
+    attire = 350;
+  } else if (g.role === "MOH") {
+    attire = 450;
+  } else if (g.role === "groomsman") {
+    attire = 250;
+  } else if (g.role === "best man") {
+    attire = 280;
   }
-  if (g.type === "vacation") {
-    return `You are a vacation cost estimator. Estimate realistic costs for one person taking this trip:
-Destination: ${g.destination}
-Date: ${g.tripDate || "upcoming"}
-Trip length: ${g.tripLength}
-Travel style: ${g.travelStyle}
 
-Assume travel from a major US city. Include round-trip flights/transport, accommodation for the full duration, food/dining, activities and entertainment, and other expenses (local transit, souvenirs, travel insurance).
+  let events = 0;
+  if (g.role === "MOH" || g.role === "best man") events = 800;
+  else if (g.role === "bridesmaid" || g.role === "groomsman") events = 600;
 
-Return ONLY valid JSON with no markdown:
-{"flights":number,"accommodation":number,"food":number,"activities":number,"other":number,"total":number,"notes":"one concise sentence about your assumptions"}`;
+  const total = travel + accommodation + gift + attire + events;
+  const notes = match
+    ? `Based on ${city.city}, ${city.state} pricing for a ${g.role}.`
+    : `Used average US city pricing — enter a major US city for a more accurate estimate.`;
+  return { travel, accommodation, gift, attire, events, total, notes };
+}
+
+function estimateVacation(g) {
+  const match = findCity(g.destination);
+  const city = match || DEFAULT_CITY;
+  const nights = { weekend: 2, short: 5, long: 10, extended: 21 }[g.tripLength] ?? 5;
+  const mult = { budget: 0.6, mid: 1.0, luxury: 1.8, ultra: 3.5 }[g.travelStyle] ?? 1.0;
+  const flightMult = { budget: 0.75, mid: 1.0, luxury: 1.3, ultra: 2.0 }[g.travelStyle] ?? 1.0;
+
+  const flights = Math.round(city.travel * flightMult);
+  const accommodation = Math.round(city.hotel * nights * mult);
+  const food = Math.round(city.food * nights * mult);
+  const activities = Math.round(80 * nights * mult);
+  const other = Math.round(150 + nights * 30 * mult);
+  const total = flights + accommodation + food + activities + other;
+
+  const styleLabel = { budget: "budget", mid: "mid-range", luxury: "luxury", ultra: "ultra-luxury" }[g.travelStyle];
+  const notes = match
+    ? `Based on a ${nights}-night ${styleLabel} trip to ${city.city}, ${city.state}.`
+    : `Used average US destination pricing — enter a major US city for a more accurate estimate.`;
+  return { flights, accommodation, food, activities, other, total, notes };
+}
+
+function estimatePurchase(g) {
+  const match = findCity(g.itemDetails);
+  const city = match || DEFAULT_CITY;
+  const details = g.itemDetails.toLowerCase();
+  let main, fees, setup, reserve, other, notes;
+
+  if (g.itemType === "home_down_payment") {
+    let homePrice = city.homePrice;
+    if (/luxury|premium|million|expensive|high-end/i.test(details)) homePrice = Math.round(homePrice * 1.5);
+    if (/starter|first|small|budget|cheap/i.test(details)) homePrice = Math.round(homePrice * 0.75);
+    main = Math.round(homePrice * 0.20);
+    fees = Math.round(homePrice * 0.03);
+    setup = 3500;
+    reserve = 12000;
+    other = 1500;
+    notes = match
+      ? `Based on ~$${Math.round(homePrice / 1000)}K home price in ${city.city}.`
+      : `Used average US pricing (~$${Math.round(homePrice / 1000)}K home). Include a US city for accuracy.`;
+  } else if (g.itemType === "car") {
+    let basePrice = 35000;
+    if (/luxury|premium|tesla|bmw|mercedes|audi|porsche|lexus/i.test(details)) basePrice = 65000;
+    if (/used|pre-owned|cheap|budget/i.test(details)) basePrice = 18000;
+    if (/truck|suv|pickup/i.test(details)) basePrice = Math.max(basePrice, 45000);
+    main = basePrice;
+    fees = Math.round(basePrice * 0.085);
+    setup = 800;
+    reserve = 2000;
+    other = 500;
+    const tier = basePrice >= 60000 ? "luxury" : basePrice >= 30000 ? "mid-range" : "budget";
+    notes = `Based on a ${tier} vehicle (~$${Math.round(basePrice / 1000)}K).`;
+  } else if (g.itemType === "engagement_ring") {
+    let basePrice = 6500;
+    if (/lab|moissanite|simulated/i.test(details)) basePrice = 2800;
+    else if (/2\s*ct|2\s*carat|large/i.test(details)) basePrice = 18000;
+    else if (/3\s*ct|3\s*carat/i.test(details)) basePrice = 35000;
+    else if (/luxury|premium|tiffany|cartier/i.test(details)) basePrice = 22000;
+    main = basePrice;
+    fees = Math.round(basePrice * 0.06);
+    setup = 200;
+    reserve = Math.round(basePrice * 0.075);
+    other = 150;
+    notes = `Based on typical pricing for the described ring.`;
+  } else if (g.itemType === "home_renovation") {
+    let basePrice = 25000;
+    if (/full|whole|gut|complete/i.test(details)) basePrice = 120000;
+    else if (/addition|extension|second story/i.test(details)) basePrice = 95000;
+    else if (/kitchen/i.test(details)) basePrice = 45000;
+    else if (/bathroom/i.test(details)) basePrice = 18000;
+    else if (/basement/i.test(details)) basePrice = 35000;
+    main = Math.round(basePrice * 0.80);
+    fees = Math.round(basePrice * 0.05);
+    setup = Math.round(basePrice * 0.05);
+    reserve = Math.round(basePrice * 0.15);
+    other = 800;
+    notes = `Based on typical scope for the renovation you described.`;
+  } else {
+    main = 8000;
+    fees = 500;
+    setup = 200;
+    reserve = 1000;
+    other = 200;
+    notes = `Generic estimate — add more details for a closer match.`;
   }
-  return `You are a major purchase cost estimator. Estimate the realistic all-in cost for this purchase:
-Item type: ${g.itemType.replace(/_/g, " ")}
-Details: ${g.itemDetails || "standard"}
-Target date: ${g.targetDate || "upcoming"}
 
-Provide a realistic breakdown. For a home down payment, "main" is the down payment itself (assume 20% on a reasonable purchase price), "fees" is closing costs, "setup" is moving/initial costs, "reserve" is recommended emergency reserve. For a car, "main" is sticker price minus trade-in, "fees" is tax/title/registration, "setup" is delivery/first insurance, "reserve" is maintenance fund. Adapt categories sensibly for other purchases. Use 0 for any category that doesn't apply.
+  const total = main + fees + setup + reserve + other;
+  return { main, fees, setup, reserve, other, total, notes };
+}
 
-Return ONLY valid JSON with no markdown:
-{"main":number,"fees":number,"setup":number,"reserve":number,"other":number,"total":number,"notes":"one concise sentence about your assumptions"}`;
+// Wrapper to keep the same async API the rest of the app expects
+async function lookupEstimate(g) {
+  // Brief artificial delay so the loading spinner feels natural
+  await new Promise((r) => setTimeout(r, 500));
+  if (g.type === "wedding")  return estimateWedding(g);
+  if (g.type === "vacation") return estimateVacation(g);
+  if (g.type === "purchase") return estimatePurchase(g);
+  throw new Error("Unknown goal type");
 }
 
 function canEstimate(g) {
@@ -508,7 +658,7 @@ function GoalsPage({ goals, onUpdate, onEstimate, onNext, onBack }) {
       <PageHeader
         step="Step 1 of 3"
         title="What are you saving for?"
-        sub="Add up to 3 goals — weddings, trips, or big purchases. We'll estimate what each one will actually cost you."
+        sub="Add up to 3 goals — weddings, trips, or big purchases. We'll estimate what each one will actually cost you. Note: MVP supports US cities only."
       />
       <div style={{ display: "flex", flexDirection: "column", gap: 18, width: "100%", maxWidth: 600 }}>
         {goals.map((g, i) => (
@@ -769,6 +919,7 @@ export default function OHC() {
   const updateGoal = (i, field, val) => {
     setGoals((gs) => gs.map((g, idx) => {
       if (idx !== i) return g;
+      // If changing goal type, clear any prior cost estimate (categories differ)
       const next = { ...g, [field]: val };
       if (field === "type") next.costs = null;
       return next;
@@ -780,7 +931,7 @@ export default function OHC() {
     if (!canEstimate(g)) return;
     setGoals((gs) => gs.map((gd, idx) => (idx === i ? { ...gd, loading: true, error: null } : gd)));
     try {
-      const costs = await callClaude(buildPrompt(g));
+      const costs = await lookupEstimate(g);
       setGoals((gs) => gs.map((gd, idx) => (idx === i ? { ...gd, costs, loading: false } : gd)));
     } catch (e) {
       setGoals((gs) =>
